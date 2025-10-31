@@ -40,7 +40,6 @@ public class HwSampleServiceImpl implements HwSampleService {
 //        var testRef = testRepo.getReferenceById(testId);
 
 
-        //todo dodelat
         Disposable d = Mono.defer(() -> readAll(client))
                 .repeatWhen(r->r.delayElements(interval))
                 .doOnNext(buf::add)

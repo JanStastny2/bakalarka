@@ -1,7 +1,6 @@
 package cz.uhk.loadtesterapp.model.dto;
 
 
-import cz.uhk.loadtesterapp.model.entity.RequestDefinition;
 import cz.uhk.loadtesterapp.model.enums.ProcessingMode;
 import cz.uhk.loadtesterapp.model.enums.TestScenario;
 import jakarta.validation.constraints.Min;
@@ -9,12 +8,12 @@ import jakarta.validation.constraints.NotNull;
 
 
 public record TestUpdateRequest(
-        @Min(1) @NotNull Integer totalRequests,
+         Integer totalRequests,
         @NotNull TestScenario testScenario,
-        @NotNull @Min(1) Integer concurrency,
+         Integer concurrency,
         @NotNull ProcessingMode processingMode,
         @Min(1) Integer poolSizeOrCap,
-        @NotNull RequestDefinition request,
+        @NotNull RequestDefinitionDto request,
         @Min(0) Long delayMs
 )
 { }

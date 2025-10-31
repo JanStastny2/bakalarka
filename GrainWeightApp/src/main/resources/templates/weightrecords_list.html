@@ -73,7 +73,6 @@
     document.addEventListener("DOMContentLoaded", function () {
         document.querySelectorAll(".clickable-row").forEach(row => {
             row.addEventListener("click", function (event) {
-                // Pokud klikl na něco uvnitř buňky s class="non-clickable", neprováděj redirect
                 if (event.target.closest(".non-clickable")) return;
 
                 const href = row.getAttribute("data-href");

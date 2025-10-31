@@ -11,18 +11,16 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.http.client.reactive.AbstractClientHttpConnectorProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/users")
-@CrossOrigin(origins = {"http://localhost:5173"})
 public class UserController {
 
     private final UserService userService;
@@ -30,6 +28,7 @@ public class UserController {
     private static final Logger log = LoggerFactory.getLogger(UserController.class);
     private final AbstractClientHttpConnectorProperties abstractClientHttpConnectorProperties;
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<List<UserDto>> getAll() {
         var users = userService.getAllUsers();
@@ -37,6 +36,7 @@ public class UserController {
                 .map(userMapper::toUserDto).toList());
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/{id}")
     public ResponseEntity<UserDto> getUser(@PathVariable Long id) {
 //        log.info("GET /api/users/{}", id);
@@ -45,6 +45,7 @@ public class UserController {
                 : ResponseEntity.notFound().build();
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     //TODO - pokud se uživatel nevytvoří -> vracet jinou RespEntity - takhle FE vždy dostane 201 created
     public ResponseEntity<UserDto> create(@RequestBody @Valid UserCreateRequest req, UriComponentsBuilder uriBuilder) {
@@ -55,6 +56,7 @@ public class UserController {
         return ResponseEntity.created(location).body(dto);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/username/{username}")
     public ResponseEntity<User> getUserByUsername(@PathVariable String username) {
         User user = userService.findByUsername(username);
@@ -64,7 +66,7 @@ public class UserController {
         return ResponseEntity.notFound().build();
     }
 
-
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
         User user = userService.getUserById(id);
@@ -75,6 +77,7 @@ public class UserController {
         return new ResponseEntity<>(HttpStatus.NOT_FOUND);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<UserDto> update(@PathVariable Long id, @RequestBody UserUpdateRequest req) {
         var entity = userService.getUserById(id);
@@ -109,9 +112,12 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{id}/password")
     public ResponseEntity<Void> adminSetPassword(@RequestBody AdminSetPasswordRequest body, @PathVariable Long id) {
         userService.adminSetPassword(id, body.newPassword());
         return ResponseEntity.ok().build();
     }
+
+
 }

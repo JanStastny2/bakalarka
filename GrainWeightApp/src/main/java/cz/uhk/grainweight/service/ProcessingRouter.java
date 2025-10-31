@@ -18,7 +18,7 @@ public class ProcessingRouter {
         this.virtual = virtual;
     }
 
-    public ProcessingStrategy pick(WorkSpec spec) {
+    public ProcessingStrategy pick(WorkSpec spec) {W
         ProcessingMode mode = spec.getMode();
         Integer size = spec.getSize();
 

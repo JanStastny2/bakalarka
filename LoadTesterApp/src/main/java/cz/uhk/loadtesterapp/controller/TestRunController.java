@@ -5,15 +5,21 @@ import cz.uhk.loadtesterapp.model.dto.*;
 import cz.uhk.loadtesterapp.model.entity.CancellationRegistry;
 import cz.uhk.loadtesterapp.model.entity.TestRun;
 import cz.uhk.loadtesterapp.model.enums.ProcessingMode;
+import cz.uhk.loadtesterapp.model.enums.TestScenario;
 import cz.uhk.loadtesterapp.model.enums.TestStatus;
-import cz.uhk.loadtesterapp.service.HwSampleService;
 import cz.uhk.loadtesterapp.service.TestCommandService;
 import cz.uhk.loadtesterapp.service.TestRunQueryService;
 import cz.uhk.loadtesterapp.service.TestRunnerService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,7 +32,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/tests")
 @RequiredArgsConstructor
-@CrossOrigin(origins = {"http://localhost:5173"})
 
 public class TestRunController {
     private static final Logger log = LoggerFactory.getLogger(TestRunController.class);
@@ -38,15 +43,6 @@ public class TestRunController {
     private final CancellationRegistry cancellationRegistry;
     private final TestRunQueryService testRunQueryService;
     private final TestMapper testMapper;
-    private final HwSampleService hwSampleService;
-
-//    public TestRunController(TestRunnerService runnerService, TestRunQueryService queryService, TestCommandService commandService, CancellationRegistry cancellationRegistry, TestRunQueryService testRunQueryService) {
-//        this.runnerService = runnerService;
-//        this.queryService = queryService;
-//        this.commandService = commandService;
-//        this.cancellationRegistry = cancellationRegistry;
-//        this.testRunQueryService = testRunQueryService;
-//    }
 
     @PostMapping
     public ResponseEntity<TestRunResponse> create(@Valid @RequestBody TestRunCreateRequest req, Authentication auth) {
@@ -60,6 +56,7 @@ public class TestRunController {
         return ResponseEntity.status(HttpStatus.CREATED).body(testMapper.toResponse(saved));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/run")
     public ResponseEntity<?> run(@PathVariable Long id) {
         if (queryService.findById(id).isEmpty()) {
@@ -69,26 +66,35 @@ public class TestRunController {
         return ResponseEntity.accepted().build();
     }
 
-    @GetMapping
-    public ResponseEntity<List<TestRunResponse>> getAll(Authentication auth) {
-        var list = queryService.list(auth).stream().map(testMapper::toResponse).toList();
-        return ResponseEntity.ok(list);
-    }
 
-
-    // TODO - mapovani + projekce (trva to mrte dloho pri nacitani vsech testu)
-//    @GetMapping()
-//    public ResponseEntity<Page<TestRun>> list(
-//            @RequestParam(required = false) TestStatus status,
-//            @RequestParam(required = false) ProcessingMode mode,
-//            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
-//            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
-//            @RequestParam(defaultValue = "0") int page,
-//            @RequestParam(defaultValue = "20") int size) {
-//
-//        Page<TestRun> out = testRunnerService.search(status, mode, from, to, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
-//        return ResponseEntity.ok(out);
+//    @GetMapping
+//    public ResponseEntity<List<TestRunResponse>> getAll(Authentication auth) {
+//        var list = queryService.list(auth).stream().map(testMapper::toResponse).toList();
+//        return ResponseEntity.ok(list);
 //    }
+
+
+    @GetMapping()
+    public ResponseEntity<Page<TestRunResponse>> list(
+            Authentication auth,
+            @RequestParam(required = false) TestStatus status,
+            @RequestParam(required = false) ProcessingMode mode,
+            @RequestParam(required = false) Integer poolSizeOrCap,
+            @RequestParam(required = false) TestScenario testScenario,
+            @RequestParam(required = false) Integer totalRequests,
+            @RequestParam(required = false) String username,
+            @RequestParam(required = false) Long createdById,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+
+        Page<TestRun> testRunPage = testRunQueryService.search(
+                auth, status, mode, poolSizeOrCap, testScenario, totalRequests, username, createdById, from, to, pageable
+        );
+
+        Page<TestRunResponse> responsePage = testRunPage.map(testMapper::toResponse);
+        return ResponseEntity.ok(responsePage);
+    }
 
     @GetMapping("/compare")
     public ResponseEntity<List<TestCompareItem>> compare(@RequestParam("ids") List<Long> ids) {
@@ -112,7 +118,7 @@ public class TestRunController {
                 t.getSummary() != null ? t.getSummary().getAvgServerProcessingMs() : null,
                 t.getSummary() != null ? t.getSummary().getAvgQueueWaitMs() : null,
                 t.getCreatedAt()
-                )).toList();
+        )).toList();
         return ResponseEntity.ok(items);
     }
 
@@ -126,7 +132,7 @@ public class TestRunController {
 
     @PutMapping("/{id}")
     public ResponseEntity<TestRunResponse> update(@PathVariable Long id,
-                                          @Valid @RequestBody TestUpdateRequest update) {
+                                                  @Valid @RequestBody TestUpdateRequest update) {
         if (update.processingMode() == ProcessingMode.SERIAL && update.poolSizeOrCap() != 1) {
             log.warn("When processing mode is SERIAL, the pool size must be 1");
             return ResponseEntity.badRequest().build();
@@ -143,11 +149,12 @@ public class TestRunController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
-         boolean deleted = commandService.deleteById(id);
-         return deleted ? ResponseEntity.ok().build() :
-                 ResponseEntity.notFound().build();
+        boolean deleted = commandService.deleteById(id);
+        return deleted ? ResponseEntity.ok().build() :
+                ResponseEntity.notFound().build();
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/approve")
     public ResponseEntity<TestRunResponse> approve(@PathVariable Long id) {
         return commandService.approve(id)
@@ -156,6 +163,7 @@ public class TestRunController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/reject")
     public ResponseEntity<TestRunResponse> reject(@PathVariable Long id) {
         return commandService.reject(id)
@@ -179,7 +187,6 @@ public class TestRunController {
             cancellationRegistry.requestCancel(id);
             return ResponseEntity.accepted().build();
         }
-
         return ResponseEntity.status(HttpStatus.CONFLICT).build();
     }
 

@@ -1,5 +1,7 @@
 package cz.uhk.loadtesterapp.service;
 
+import cz.uhk.loadtesterapp.mapper.TestMapper;
+import cz.uhk.loadtesterapp.model.entity.RequestDefinition;
 import cz.uhk.loadtesterapp.model.entity.TestRun;
 import cz.uhk.loadtesterapp.model.enums.ProcessingMode;
 import cz.uhk.loadtesterapp.model.enums.TestStatus;
@@ -20,6 +22,7 @@ public class TestCommandServiceImpl implements TestCommandService {
 
     private final TestRepository repo;
     private final UserService userService;
+    private final TestMapper testMapper;
 
     @Override
     @Transactional
@@ -37,6 +40,7 @@ public class TestCommandServiceImpl implements TestCommandService {
         return repo.findById(id).map(entity -> {
             if(entity.getStatus() != TestStatus.CREATED)
                 throw new IllegalStateException("Test is not in CREATED state");
+
             entity.setTotalRequests(update.totalRequests());
             entity.setConcurrency(update.concurrency());
             entity.setProcessingMode(update.processingMode());
@@ -47,7 +51,8 @@ public class TestCommandServiceImpl implements TestCommandService {
             if (update.delayMs() != null)
                 entity.setDelayMs(update.delayMs());
 
-            entity.setRequest(update.request());
+            RequestDefinition requestEntity = testMapper.toEntity(update.request());
+            entity.setRequest(requestEntity);
             return entity;
         });
     }
